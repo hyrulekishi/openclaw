@@ -1,0 +1,26 @@
+{
+  "version": "REDACTED",
+  "profiles": {
+    "openai-codex:default": {
+      "type": "REDACTED",
+      "provider": "openai-codex",
+      "access": "REDACTED",
+      "refresh": "REDACTED",
+      "expires": "REDACTED",
+      "accountId": "REDACTED"
+    }
+  },
+  "lastGood": {
+    "openai-codex": "REDACTED"
+  },
+  "usageStats": {
+    "openrouter:default": {
+      "errorCount": "REDACTED",
+      "lastUsed": "REDACTED"
+    },
+    "openai-codex:default": {
+      "errorCount": "REDACTED",
+      "lastUsed": "REDACTED"
+    }
+  }
+}

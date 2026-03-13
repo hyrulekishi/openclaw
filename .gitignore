@@ -1,0 +1,16 @@
+.env
+**/.env
+credentials/
+devices/
+logs/
+canvas/
+completions/
+sandboxes/
+telegram/
+agents/*/sessions/
+*.bak*
+*.tmp
+*.lock
+*.reset.*
+update-check.json
+exec-approvals.json
