@@ -272,7 +272,8 @@
             "cacheWrite": 0
           },
           "contextWindow": 16000,
-          "maxTokens": 4096
+          "maxTokens": 4096,
+          "api": "openai-completions"
         }
       ]
     },

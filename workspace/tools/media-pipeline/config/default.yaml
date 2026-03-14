@@ -1,0 +1,17 @@
+model_profiles:
+  fast: medium
+  balanced: large-v3-turbo
+  best: large-v3
+
+default_profile: balanced
+default_language: auto
+vad_filter: true
+word_timestamps: false
+
+audio:
+  sample_rate: 16000
+  channels: 1
+  format: wav
+
+paths:
+  output_root: ~/.openclaw/workspace/tools/media-pipeline/output

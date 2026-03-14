@@ -1,7 +1,7 @@
 {
   "meta": {
     "lastTouchedVersion": "2026.3.12",
-    "lastTouchedAt": "2026-03-13T06:31:34.356Z"
+    "lastTouchedAt": "2026-03-14T02:49:26.733Z"
   },
   "wizard": {
     "lastRunAt": "2026-03-13T05:57:03.439Z",
@@ -60,9 +60,20 @@
       "models": {
         "lmstudio-312/qwen3.5-9b-null-space-abliterated@q6_k": {
           "alias": "qwen3.5-9B"
-        }
+        },
+        "openai-codex/gpt-5.4": {},
+        "openai-codex/gpt-5.3-codex": {}
       },
       "workspace": "/home/user/.openclaw/workspace",
+      "memorySearch": {
+        "provider": "openai",
+        "model": "text-embedding-qwen",
+        "remote": {
+          "baseUrl": "http://127.0.0.1:1235/v1/",
+          "apiKey": "REDACTED"
+        },
+        "fallback": "none"
+      },
       "compaction": {
         "mode": "safeguard"
       },
@@ -75,6 +86,86 @@
       {
         "id": "main",
         "model": "openai-codex/gpt-5.4"
+      },
+      {
+        "id": "risk-worker",
+        "model": "openai-codex/gpt-5.4",
+        "sandbox": {
+          "mode": "all",
+          "workspaceAccess": "none",
+          "scope": "session",
+          "workspaceRoot": "~/.openclaw/sandboxes",
+          "docker": {
+            "image": "openclaw-sandbox:bookworm-slim",
+            "containerPrefix": "openclaw-risk-",
+            "workdir": "/workspace",
+            "readOnlyRoot": true,
+            "tmpfs": [
+              "/tmp",
+              "/var/tmp",
+              "/run"
+            ],
+            "network": "none",
+            "user": "1000:1000",
+            "capDrop": [
+              "ALL"
+            ],
+            "env": {
+              "LANG": "C.UTF-8"
+            },
+            "pidsLimit": 256,
+            "memory": "1g",
+            "memorySwap": "2g",
+            "cpus": 1,
+            "ulimits": {
+              "nofile": {
+                "soft": 1024,
+                "hard": 2048
+              },
+              "nproc": 256
+            }
+          },
+          "browser": {
+            "enabled": false,
+            "allowHostControl": false
+          },
+          "prune": {
+            "idleHours": 24,
+            "maxAgeDays": 7
+          }
+        },
+        "tools": {
+          "sandbox": {
+            "tools": {
+              "allow": [
+                "exec",
+                "process",
+                "read",
+                "write",
+                "edit",
+                "sessions_list",
+                "sessions_history",
+                "sessions_send",
+                "sessions_spawn",
+                "session_status"
+              ],
+              "deny": [
+                "browser",
+                "canvas",
+                "cron",
+                "gateway",
+                "telegram",
+                "discord",
+                "slack",
+                "signal",
+                "imessage",
+                "line",
+                "googlechat",
+                "whatsapp"
+              ]
+            }
+          }
+        }
       }
     ]
   },
@@ -96,9 +187,12 @@
   "channels": {
     "telegram": {
       "enabled": true,
+      "network": {
+        "autoSelectFamily": false
+      },
       "dmPolicy": "pairing",
       "allowFrom": [
-        "erika5th"
+        "2018861446"
       ],
       "groupPolicy": "allowlist",
       "streaming": "partial"

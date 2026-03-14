@@ -8,6 +8,13 @@ completions/
 sandboxes/
 telegram/
 agents/*/sessions/
+workspace/memory/
+workspace/.clawhub/
+workspace/tools/**/.venv/
+workspace/tools/**/__pycache__/
+workspace/tools/**/output/
+workspace/tools/**/*.pyc
+workspace/tools/**/*.mp3
 *.bak*
 *.tmp
 *.lock

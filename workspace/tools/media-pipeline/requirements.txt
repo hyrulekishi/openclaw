@@ -1,0 +1,3 @@
+faster-whisper
+ctranslate2
+huggingface-hub
