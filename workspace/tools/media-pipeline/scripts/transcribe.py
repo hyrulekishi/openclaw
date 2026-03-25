@@ -81,6 +81,7 @@ def main():
     parser.add_argument("--beam-size", type=int, default=5)
     parser.add_argument("--output-dir", default=None, help="Directory for transcript outputs")
     parser.add_argument("--json-stdout", action="store_true", help="Print transcript JSON to stdout")
+    parser.add_argument("--debug", action="store_true", help="Keep extra debug artifacts like transcript.txt and meta.json")
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
 
@@ -145,16 +146,17 @@ def main():
 
     result["text"] = "\n".join(texts).strip()
 
-    out["txt"].write_text(result["text"] + ("\n" if result["text"] else ""), encoding="utf-8")
     out["json"].write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    meta = {
-        "source": str(audio_path),
-        "model": model_name,
-        "device": device,
-        "compute_type": compute_type,
-        "output_dir": str(out["txt"].parent),
-    }
-    out["meta"].write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    if args.debug:
+        out["txt"].write_text(result["text"] + ("\n" if result["text"] else ""), encoding="utf-8")
+        meta = {
+            "source": str(audio_path),
+            "model": model_name,
+            "device": device,
+            "compute_type": compute_type,
+            "output_dir": str(out["txt"].parent),
+        }
+        out["meta"].write_text(json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     if args.json_stdout:
         print(json.dumps(result, ensure_ascii=False, indent=2))

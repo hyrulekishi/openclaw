@@ -1,7 +1,6 @@
 #!/home/user/.openclaw/workspace/tools/media-pipeline/.venv/bin/python
 import argparse
 import json
-import re
 import socket
 import sys
 import time
@@ -12,7 +11,13 @@ from pathlib import Path
 
 def google_translate(text: str, source_lang: str, target_lang: str) -> str:
     sl = source_lang if source_lang and source_lang != 'auto' else 'auto'
-    q = urllib.parse.urlencode({'client': 'gtx', 'sl': sl, 'tl': target_lang, 'dt': 't', 'q': text})
+    q = urllib.parse.urlencode({
+        'client': 'gtx',
+        'sl': sl,
+        'tl': target_lang,
+        'dt': 't',
+        'q': text,
+    })
     url = 'https://translate.googleapis.com/translate_a/single?' + q
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
     with urllib.request.urlopen(req, timeout=30) as r:
@@ -21,16 +26,21 @@ def google_translate(text: str, source_lang: str, target_lang: str) -> str:
 
 
 def google_translate_retry(text: str, source_lang: str, target_lang: str, retries: int = 2) -> str:
-    delays = [1, 2, 4]
+    delays = [1, 2]
     last_err = None
-    for i in range(max(1, retries)):
+    for i in range(retries):
         try:
             return google_translate(text, source_lang, target_lang)
         except Exception as e:
             last_err = e
-            if i < max(1, retries) - 1:
-                time.sleep(delays[min(i, len(delays) - 1)])
+            if i < retries - 1:
+                time.sleep(delays[i])
     raise last_err
+
+
+def batched(seq, n):
+    for i in range(0, len(seq), n):
+        yield seq[i:i + n]
 
 
 def batched_by_chars(segs, max_chars):
@@ -55,7 +65,9 @@ def batched_for_refine(segs, max_chars):
     chunk = []
     current_chars = 0
     for seg in segs:
-        seg_chars = len((seg.get('text') or '').strip()) + len((seg.get('translation') or '').strip())
+        src = len((seg.get('text') or '').strip())
+        tgt = len((seg.get('translation') or '').strip())
+        seg_chars = src + tgt
         if chunk and current_chars + seg_chars > max_chars:
             yield chunk
             chunk = []
@@ -77,7 +89,11 @@ def load_partial(path: Path):
         return {}
     try:
         obj = json.loads(path.read_text(encoding='utf-8'))
-        return {str(s.get('id')): s.get('translation', '') for s in obj.get('segments', []) if s.get('id') is not None and s.get('translation')}
+        return {
+            str(s.get('id')): s.get('translation', '')
+            for s in obj.get('segments', [])
+            if s.get('id') is not None and s.get('translation')
+        }
     except Exception:
         return {}
 
@@ -134,41 +150,42 @@ def is_noisy_segment(text: str, translation: str) -> bool:
             max_run = max(max_run, current_run)
         else:
             current_run = 1
-    repeated_char_ratio = len(translation) / max(1, len(text)) if text else 1.0
-    return punct_ratio > 0.18 or max_run >= 8 or (len(text) <= 60 and len(translation) >= 220) or (repeated_char_ratio >= 5.0 and len(translation) >= 180)
+    repeated_ratio = len(translation) / max(1, len(text)) if text else 1.0
+    return punct_ratio > 0.18 or max_run >= 8 or (len(text) <= 60 and len(translation) >= 220) or (repeated_ratio >= 5.0 and len(translation) >= 180)
 
 
-def lmstudio_refine_batch(batch, base_url: str, request_timeout: float):
+def lmstudio_refine_batch(batch, source_lang: str, target_lang: str, base_url: str, request_timeout: float):
     url = base_url.rstrip('/') + '/v1/chat/completions'
     payload = {
         'model': 'qwen3.5-9B',
-        'temperature': 0.15,
+        'temperature': 0.2,
         'messages': [
             {
                 'role': 'system',
                 'content': (
-                    'You are a Japanese-to-Chinese translation refiner for noisy extracted documents. '
+                    'You are a subtitle translation refiner. '
                     'Keep segment count and order unchanged. '
-                    'Do not add, remove, summarize, censor, or invent information. '
-                    'Use the source text to correct mistranslations, restore proper reading order when the MT is awkward, '
-                    'and eliminate leftover Japanese unless it is a name or unavoidable quoted term. '
-                    'Normalize scream-like punctuation and decorative symbols into readable Chinese prose where possible. '
-                    'Preserve names, scene logic, and explicit content faithfully. '
-                    'Return exactly one line per input segment. '
-                    'Each line must start with REFINE::<id>:: and then the final Chinese text. '
-                    'Do not output JSON, numbering, notes, or extra lines.'
+                    'Do not add, remove, or invent information. '
+                    'Rewrite the Chinese translations to sound natural, fluent, and human. '
+                    'Avoid machine-translation phrasing, stiff wording, promotional tone, and repetitive patterns. '
+                    'Return exactly one refined Chinese line per input segment, in the same order as input. '
+                    'Do not return JSON. Do not add numbering. Do not add explanations.'
                 )
             },
             {
                 'role': 'user',
-                'content': '\n'.join(
-                    f"SEG::{s.get('id')}\\nSRC::{(s.get('text') or '').strip()}\\nMT::{(s.get('translation') or '').strip()}"
+                'content': '\n\n'.join(
+                    f"SOURCE:\n{(s.get('text') or '').strip()}\n\nMACHINE_TRANSLATION:\n{(s.get('translation') or '').strip()}"
                     for s in batch
                 )
             }
         ]
     }
-    req = urllib.request.Request(url, data=json.dumps(payload).encode('utf-8'), headers={'Content-Type': 'application/json'})
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode('utf-8'),
+        headers={'Content-Type': 'application/json'}
+    )
     with urllib.request.urlopen(req, timeout=request_timeout) as r:
         data = json.loads(r.read().decode('utf-8', errors='replace'))
     content = data['choices'][0]['message']['content'].strip()
@@ -179,23 +196,12 @@ def lmstudio_refine_batch(batch, base_url: str, request_timeout: float):
         if lines and lines[-1].startswith('```'):
             lines = lines[:-1]
         content = '\n'.join(lines).strip()
-
-    parsed = {}
-    markers = list(re.finditer(r'REFINE::\s*(\d+)::', content))
-    for i, match in enumerate(markers):
-        seg_id = match.group(1).strip()
-        start = match.end()
-        end = markers[i + 1].start() if i + 1 < len(markers) else len(content)
-        refined = content[start:end].strip()
-        refined = re.split(r'REFINE::\s*\d+::', refined, maxsplit=1)[0].strip()
-        refined = ' '.join(part.strip() for part in refined.splitlines() if part.strip())
-        if refined:
-            parsed[seg_id] = refined
-    return parsed
+    lines = [line.strip() for line in content.splitlines() if line.strip()]
+    return lines
 
 
 def main():
-    p = argparse.ArgumentParser(description='Translate normalized segments')
+    p = argparse.ArgumentParser(description='Translate normalized segments (plan A)')
     p.add_argument('--input', required=True)
     p.add_argument('--output', required=True)
     p.add_argument('--source-lang', default='auto')
@@ -203,12 +209,12 @@ def main():
     p.add_argument('--chunk-size', type=int, default=20)
     p.add_argument('--context-window', type=int, default=2)
     p.add_argument('--sleep-ms', type=int, default=300)
-    p.add_argument('--translate-max-chars', type=int, default=1200)
+    p.add_argument('--translate-max-chars', type=int, default=1500)
     p.add_argument('--translate-retries', type=int, default=2)
     p.add_argument('--refine', action='store_true')
     p.add_argument('--refine-base-url', default='http://127.0.0.1:1235')
     p.add_argument('--refine-chunk-size', type=int, default=8)
-    p.add_argument('--refine-max-chars', type=int, default=900)
+    p.add_argument('--refine-max-chars', type=int, default=2200)
     p.add_argument('--refine-retries', type=int, default=2)
     p.add_argument('--refine-ready-timeout', type=float, default=10.0)
     p.add_argument('--refine-timeout', type=float, default=40.0)
@@ -229,11 +235,12 @@ def main():
 
     partial_map = load_partial(partial_path)
     translated = []
-    separator = '<<<SEG_BREAK_PLAN_B>>>'
+    separator = '<<<SEG_BREAK_7f3c2a>>>'
     translate_status = 'ok'
     translate_error = None
-    translate_elapsed_ms = 0
     translate_started_at = time.time()
+    translate_elapsed_ms = 0
+    translate_max_chars_used = args.translate_max_chars
 
     try:
         for chunk in batched_by_chars(segs, args.translate_max_chars):
@@ -249,8 +256,14 @@ def main():
                     pending.append(seg)
                     pending_texts.append((seg.get('text') or '').strip())
             if pending:
-                print(f"[translate] batch segments={len(pending_texts)} chars={sum(len(t) for t in pending_texts)} max_chars={args.translate_max_chars}", file=sys.stderr)
-                batch_parts = translate_batch(pending_texts, source_lang, args.target_lang, separator, retries=args.translate_retries)
+                batch_char_count = sum(len(t) for t in pending_texts)
+                print(f"[translate][plan_a] batch segments={len(pending_texts)} chars={batch_char_count} max_chars={args.translate_max_chars}", file=sys.stderr)
+                try:
+                    batch_parts = translate_batch(pending_texts, source_lang, args.target_lang, separator, retries=args.translate_retries)
+                except Exception as e:
+                    translate_status = 'failed'
+                    translate_error = f'batch_translate_failed: {e}'
+                    raise
                 if len(batch_parts) != len(pending_texts):
                     raise RuntimeError('batch translate segment count mismatch')
                 for seg, t in zip(pending, batch_parts):
@@ -263,10 +276,8 @@ def main():
             if args.sleep_ms:
                 time.sleep(args.sleep_ms / 1000.0)
     except Exception as e:
-        translate_status = 'failed'
-        translate_error = str(e)
         translate_elapsed_ms = round((time.time() - translate_started_at) * 1000)
-        print(f"[translate] failed fast after {translate_elapsed_ms} ms: {translate_error}", file=sys.stderr)
+        print(f"[translate][plan_a] failed fast after {translate_elapsed_ms} ms: {translate_error or e}", file=sys.stderr)
         raise
     else:
         translate_elapsed_ms = round((time.time() - translate_started_at) * 1000)
@@ -278,13 +289,14 @@ def main():
     refine_error = None
     refine_elapsed_ms = 0
     refine_chunk_size_used = 0
+    refine_max_chars_used = args.refine_max_chars
     refine_skipped_noisy = 0
     refine_partial_missing = 0
     if args.refine and translated:
         refine_status = 'requested'
-        started = time.time()
+        refine_started_at = time.time()
         try:
-            print(f"[refine] waiting for local model at {args.refine_base_url} (timeout={args.refine_ready_timeout:.0f}s)", file=sys.stderr)
+            print(f"[refine][plan_a] waiting for local model at {args.refine_base_url} (timeout={args.refine_ready_timeout:.0f}s)", file=sys.stderr)
             wait_for_lmstudio(args.refine_base_url, ready_timeout=args.refine_ready_timeout)
             refined = []
             changed_count = 0
@@ -296,50 +308,46 @@ def main():
                 else:
                     refine_candidates.append(seg)
             refine_batches = list(batched_for_refine(refine_candidates, args.refine_max_chars))
-            refine_chunk_size_used = max((len(chunk) for chunk in refine_batches), default=0)
+            refine_chunk_size_used = max((len(c) for c in refine_batches), default=0)
             total_chunks = len(refine_batches)
             for idx, chunk in enumerate(refine_batches, start=1):
-                chunk_chars = sum(len((seg.get('text') or '').strip()) + len((seg.get('translation') or '').strip()) for seg in chunk)
-                refined_map = None
+                chunk_chars = sum(len((s.get('text') or '').strip()) + len((s.get('translation') or '').strip()) for s in chunk)
+                line_results = None
                 for attempt in range(1, max(1, args.refine_retries) + 1):
-                    chunk_started_at = time.time()
-                    print(f"[refine] chunk {idx}/{total_chunks} attempt {attempt}/{max(1, args.refine_retries)} size={len(chunk)} chars={chunk_chars} max_chars={args.refine_max_chars} timeout={args.refine_timeout:.0f}s", file=sys.stderr)
+                    started = time.time()
+                    print(f"[refine][plan_a] chunk {idx}/{total_chunks} attempt {attempt}/{max(1,args.refine_retries)} size={len(chunk)} chars={chunk_chars} max_chars={args.refine_max_chars} timeout={args.refine_timeout:.0f}s", file=sys.stderr)
                     try:
-                        refined_map = lmstudio_refine_batch(chunk, args.refine_base_url, args.refine_timeout)
-                        missing_ids = [str(seg.get('id')) for seg in chunk if str(seg.get('id')) not in refined_map]
-                        if missing_ids:
-                            for seg in chunk:
-                                sid = str(seg.get('id'))
-                                if sid in refined_map:
-                                    continue
-                                single_map = lmstudio_refine_batch([seg], args.refine_base_url, args.refine_timeout)
-                                if sid in single_map:
-                                    refined_map[sid] = single_map[sid]
-                        elapsed = round((time.time() - chunk_started_at) * 1000)
-                        missing_ids = [str(seg.get('id')) for seg in chunk if str(seg.get('id')) not in refined_map]
-                        print(f"[refine] chunk {idx}/{total_chunks} done in {elapsed} ms missing={len(missing_ids)}", file=sys.stderr)
+                        line_results = lmstudio_refine_batch(chunk, source_lang, args.target_lang, args.refine_base_url, args.refine_timeout)
+                        elapsed = round((time.time() - started) * 1000)
+                        print(f"[refine][plan_a] chunk {idx}/{total_chunks} done in {elapsed} ms lines={len(line_results)}", file=sys.stderr)
                         break
                     except Exception as e:
-                        elapsed = round((time.time() - chunk_started_at) * 1000)
-                        print(f"[refine] chunk {idx}/{total_chunks} attempt {attempt} failed in {elapsed} ms: {e}", file=sys.stderr)
+                        elapsed = round((time.time() - started) * 1000)
+                        print(f"[refine][plan_a] chunk {idx}/{total_chunks} attempt {attempt} failed in {elapsed} ms: {e}", file=sys.stderr)
                         if attempt >= max(1, args.refine_retries):
                             raise
-                for seg in chunk:
+                local_changes = 0
+                line_results = line_results or []
+                for pos, seg in enumerate(chunk):
                     item = dict(seg)
-                    sid = str(seg.get('id'))
-                    new_text = (refined_map or {}).get(sid, '').strip() or (seg.get('translation') or '')
-                    if sid not in (refined_map or {}):
+                    if pos < len(line_results) and line_results[pos].strip():
+                        new_text = line_results[pos].strip()
+                    else:
+                        new_text = seg.get('translation') or ''
                         refine_partial_missing += 1
                     item['translation'] = new_text
                     if new_text != (seg.get('translation') or ''):
-                        changed_count += 1
+                        local_changes += 1
                     refined.append(item)
+                changed_count += local_changes
             if changed_count > 0:
-                translated = sorted(refined, key=lambda x: x.get('id', 0))
+                refined.sort(key=lambda x: x.get('id', 0))
+                translated = refined
                 refine_applied = True
                 refine_status = 'applied'
             else:
-                translated = sorted(refined, key=lambda x: x.get('id', 0))
+                refined.sort(key=lambda x: x.get('id', 0))
+                translated = refined
                 refine_status = 'no_change'
         except Exception as e:
             refine_error = str(e)
@@ -350,12 +358,12 @@ def main():
                 refine_status = 'timeout'
             else:
                 refine_status = 'failed'
-            print(f"[refine] skipped: {e}", file=sys.stderr)
+            print(f"[refine][plan_a] skipped: {e}", file=sys.stderr)
             if args.refine_strict:
                 raise
         finally:
-            refine_elapsed_ms = round((time.time() - started) * 1000)
-            print(f"[refine] total elapsed={refine_elapsed_ms} ms status={refine_status}", file=sys.stderr)
+            refine_elapsed_ms = round((time.time() - refine_started_at) * 1000)
+            print(f"[refine][plan_a] total elapsed={refine_elapsed_ms} ms status={refine_status}", file=sys.stderr)
 
     result = {
         'source_type': source_type,
@@ -365,17 +373,17 @@ def main():
         'translate_status': translate_status,
         'translate_error': translate_error,
         'translate_elapsed_ms': translate_elapsed_ms,
-        'translate_max_chars_used': args.translate_max_chars,
+        'translate_max_chars_used': translate_max_chars_used,
         'refine_requested': args.refine,
         'refine_applied': refine_applied,
         'refine_status': refine_status,
         'refine_error': refine_error,
         'refine_elapsed_ms': refine_elapsed_ms,
         'refine_chunk_size_used': refine_chunk_size_used,
-        'refine_max_chars_used': args.refine_max_chars,
+        'refine_max_chars_used': refine_max_chars_used,
         'refine_skipped_noisy': refine_skipped_noisy,
         'refine_partial_missing': refine_partial_missing,
-        'plan': 'main',
+        'plan': 'a',
         'segments': translated,
     }
 

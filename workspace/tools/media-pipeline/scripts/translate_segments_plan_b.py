@@ -195,7 +195,7 @@ def lmstudio_refine_batch(batch, base_url: str, request_timeout: float):
 
 
 def main():
-    p = argparse.ArgumentParser(description='Translate normalized segments')
+    p = argparse.ArgumentParser(description='Translate normalized segments (plan B)')
     p.add_argument('--input', required=True)
     p.add_argument('--output', required=True)
     p.add_argument('--source-lang', default='auto')
@@ -249,7 +249,7 @@ def main():
                     pending.append(seg)
                     pending_texts.append((seg.get('text') or '').strip())
             if pending:
-                print(f"[translate] batch segments={len(pending_texts)} chars={sum(len(t) for t in pending_texts)} max_chars={args.translate_max_chars}", file=sys.stderr)
+                print(f"[translate][plan_b] batch segments={len(pending_texts)} chars={sum(len(t) for t in pending_texts)} max_chars={args.translate_max_chars}", file=sys.stderr)
                 batch_parts = translate_batch(pending_texts, source_lang, args.target_lang, separator, retries=args.translate_retries)
                 if len(batch_parts) != len(pending_texts):
                     raise RuntimeError('batch translate segment count mismatch')
@@ -266,7 +266,7 @@ def main():
         translate_status = 'failed'
         translate_error = str(e)
         translate_elapsed_ms = round((time.time() - translate_started_at) * 1000)
-        print(f"[translate] failed fast after {translate_elapsed_ms} ms: {translate_error}", file=sys.stderr)
+        print(f"[translate][plan_b] failed fast after {translate_elapsed_ms} ms: {translate_error}", file=sys.stderr)
         raise
     else:
         translate_elapsed_ms = round((time.time() - translate_started_at) * 1000)
@@ -284,7 +284,7 @@ def main():
         refine_status = 'requested'
         started = time.time()
         try:
-            print(f"[refine] waiting for local model at {args.refine_base_url} (timeout={args.refine_ready_timeout:.0f}s)", file=sys.stderr)
+            print(f"[refine][plan_b] waiting for local model at {args.refine_base_url} (timeout={args.refine_ready_timeout:.0f}s)", file=sys.stderr)
             wait_for_lmstudio(args.refine_base_url, ready_timeout=args.refine_ready_timeout)
             refined = []
             changed_count = 0
@@ -303,7 +303,7 @@ def main():
                 refined_map = None
                 for attempt in range(1, max(1, args.refine_retries) + 1):
                     chunk_started_at = time.time()
-                    print(f"[refine] chunk {idx}/{total_chunks} attempt {attempt}/{max(1, args.refine_retries)} size={len(chunk)} chars={chunk_chars} max_chars={args.refine_max_chars} timeout={args.refine_timeout:.0f}s", file=sys.stderr)
+                    print(f"[refine][plan_b] chunk {idx}/{total_chunks} attempt {attempt}/{max(1, args.refine_retries)} size={len(chunk)} chars={chunk_chars} max_chars={args.refine_max_chars} timeout={args.refine_timeout:.0f}s", file=sys.stderr)
                     try:
                         refined_map = lmstudio_refine_batch(chunk, args.refine_base_url, args.refine_timeout)
                         missing_ids = [str(seg.get('id')) for seg in chunk if str(seg.get('id')) not in refined_map]
@@ -317,11 +317,11 @@ def main():
                                     refined_map[sid] = single_map[sid]
                         elapsed = round((time.time() - chunk_started_at) * 1000)
                         missing_ids = [str(seg.get('id')) for seg in chunk if str(seg.get('id')) not in refined_map]
-                        print(f"[refine] chunk {idx}/{total_chunks} done in {elapsed} ms missing={len(missing_ids)}", file=sys.stderr)
+                        print(f"[refine][plan_b] chunk {idx}/{total_chunks} done in {elapsed} ms missing={len(missing_ids)}", file=sys.stderr)
                         break
                     except Exception as e:
                         elapsed = round((time.time() - chunk_started_at) * 1000)
-                        print(f"[refine] chunk {idx}/{total_chunks} attempt {attempt} failed in {elapsed} ms: {e}", file=sys.stderr)
+                        print(f"[refine][plan_b] chunk {idx}/{total_chunks} attempt {attempt} failed in {elapsed} ms: {e}", file=sys.stderr)
                         if attempt >= max(1, args.refine_retries):
                             raise
                 for seg in chunk:
@@ -350,12 +350,12 @@ def main():
                 refine_status = 'timeout'
             else:
                 refine_status = 'failed'
-            print(f"[refine] skipped: {e}", file=sys.stderr)
+            print(f"[refine][plan_b] skipped: {e}", file=sys.stderr)
             if args.refine_strict:
                 raise
         finally:
             refine_elapsed_ms = round((time.time() - started) * 1000)
-            print(f"[refine] total elapsed={refine_elapsed_ms} ms status={refine_status}", file=sys.stderr)
+            print(f"[refine][plan_b] total elapsed={refine_elapsed_ms} ms status={refine_status}", file=sys.stderr)
 
     result = {
         'source_type': source_type,
@@ -375,7 +375,7 @@ def main():
         'refine_max_chars_used': args.refine_max_chars,
         'refine_skipped_noisy': refine_skipped_noisy,
         'refine_partial_missing': refine_partial_missing,
-        'plan': 'main',
+        'plan': 'b',
         'segments': translated,
     }
 

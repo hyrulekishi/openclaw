@@ -155,7 +155,7 @@ def normalize_text(text: str):
         'source_type': 'text',
         'language': 'auto',
         'has_timestamps': False,
-        'normalization_plan': 'main',
+        'normalization_plan': 'b',
         'segments': segs,
     }
 
@@ -179,7 +179,7 @@ def normalize_transcript(obj):
         'source_type': 'transcript',
         'language': obj.get('language') or obj.get('source_lang') or 'auto',
         'has_timestamps': any(x.get('start') is not None and x.get('end') is not None for x in out),
-        'normalization_plan': 'main',
+        'normalization_plan': 'b',
         'segments': out,
     }
 
@@ -200,7 +200,7 @@ def normalize_web(source: str):
         'source_type': 'web',
         'language': 'auto',
         'has_timestamps': False,
-        'normalization_plan': 'main',
+        'normalization_plan': 'b',
         'segments': split_text_blocks(text),
     }
 
@@ -221,7 +221,7 @@ def normalize_pdf(path: str):
         'source_type': 'pdf',
         'language': 'auto',
         'has_timestamps': False,
-        'normalization_plan': 'main',
+        'normalization_plan': 'b',
         'segments': split_text_blocks('\n\n'.join(texts)),
     }
 
@@ -256,7 +256,7 @@ def normalize_docx(path: str):
         'source_type': 'docx',
         'language': 'auto',
         'has_timestamps': False,
-        'normalization_plan': 'main',
+        'normalization_plan': 'b',
         'segments': split_text_blocks('\n\n'.join(texts)),
     }
 
@@ -299,7 +299,7 @@ def normalize_generic_json(obj):
         'source_type': 'json',
         'language': 'auto',
         'has_timestamps': any(x.get('start') is not None and x.get('end') is not None for x in out),
-        'normalization_plan': 'main',
+        'normalization_plan': 'b',
         'segments': out,
     }
 
@@ -311,7 +311,7 @@ def normalize_ocr(obj):
 
 
 def main():
-    p = argparse.ArgumentParser(description='Normalize various inputs into segment JSON')
+    p = argparse.ArgumentParser(description='Normalize various inputs into segment JSON (plan B)')
     p.add_argument('--input', required=True, help='Input file path or URL')
     p.add_argument('--type', choices=['auto', 'text', 'transcript', 'json', 'web', 'pdf', 'docx', 'ocr'], default='auto')
     p.add_argument('--output', default=None, help='Output JSON path')

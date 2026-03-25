@@ -11,7 +11,8 @@ FULL_TAR="$FULL_DST/openclaw-full-$STAMP.tar.gz"
 FULL_GPG="$FULL_TAR.gpg"
 
 mkdir -p "$GIT_DST" "$FULL_STAGE" "$FULL_DST"
-rm -rf "$GIT_DST"/* "$FULL_STAGE"/*
+rm -rf "$GIT_DST/openclaw"
+rm -rf "$FULL_STAGE"/*
 mkdir -p "$GIT_DST/openclaw" "$FULL_STAGE/openclaw"
 
 copy_if_exists() {
@@ -58,7 +59,25 @@ copy_tree_excluding_jsonl() {
 copy_if_exists "$OC/openclaw.json" "$GIT_DST/openclaw/openclaw.json"
 if [ -d "$OC/workspace" ]; then
   mkdir -p "$GIT_DST/openclaw/workspace"
-  (cd "$OC/workspace" && tar --exclude='./backups' -cf - .) | (cd "$GIT_DST/openclaw/workspace" && tar -xf -)
+  (cd "$OC/workspace" && tar \
+    --exclude='./backups' \
+    --exclude='./memory' \
+    --exclude='./tmp' \
+    --exclude='./canvas' \
+    --exclude='./output' \
+    --exclude='./research/memory-lancedb-pro' \
+    --exclude='./.clawhub' \
+    --exclude='./tmp-*' \
+    --exclude='*/output' \
+    --exclude='*/.venv' \
+    --exclude='*/__pycache__' \
+    --exclude='*/.pytest_cache' \
+    --exclude='*/.mypy_cache' \
+    --exclude='*/.ruff_cache' \
+    --exclude='*/node_modules' \
+    --exclude='*/.git' \
+    --exclude='*/.clawhub' \
+    -cf - .) | (cd "$GIT_DST/openclaw/workspace" && tar -xf -)
 fi
 copy_dir_contents "$OC/cron" "$GIT_DST/openclaw/cron"
 copy_if_exists "$OC/identity/device.json" "$GIT_DST/openclaw/identity/device.json"
@@ -132,9 +151,20 @@ rm -rf \
   "$GIT_DST/openclaw/completions" \
   "$GIT_DST/openclaw/agents/main/sessions" 2>/dev/null || true
 
-find "$GIT_DST/openclaw" \( -name '*.bak*' -o -name '*.tmp' -o -name '*.lock' -o -name '*.reset.*' -o -name '.env' -o -name 'paired.json' -o -name 'pending.json' -o -name 'update-check.json' -o -name 'exec-approvals.json' \) -print0 2>/dev/null | while IFS= read -r -d '' f; do
+find "$GIT_DST/openclaw" \( -name '*.bak*' -o -name '*.tmp' -o -name '*.lock' -o -name '*.reset.*' -o -name '.env' -o -name 'paired.json' -o -name 'pending.json' -o -name 'update-check.json' -o -name 'exec-approvals.json' -o -name '__pycache__' -o -name '.pytest_cache' -o -name '.mypy_cache' -o -name '.ruff_cache' -o -name '.venv' -o -name 'node_modules' \) -print0 2>/dev/null | while IFS= read -r -d '' f; do
   rm -rf "$f"
 done
+
+rm -rf \
+  "$GIT_DST/openclaw/workspace/.clawhub" \
+  "$GIT_DST/openclaw/workspace/memory" \
+  "$GIT_DST/openclaw/workspace/tmp" \
+  "$GIT_DST/openclaw/workspace/canvas" \
+  "$GIT_DST/openclaw/workspace/output" \
+  "$GIT_DST/openclaw/workspace/research/memory-lancedb-pro" 2>/dev/null || true
+
+find "$GIT_DST/openclaw/workspace" -type d \( -name '.git' -o -name '.clawhub' \) -prune -exec rm -rf {} + 2>/dev/null || true
+find "$GIT_DST/openclaw/workspace" -maxdepth 1 -type f -name 'tmp-*' -delete 2>/dev/null || true
 
 cat > "$GIT_DST/openclaw/.gitignore" <<'EOF'
 .env
@@ -147,6 +177,18 @@ completions/
 sandboxes/
 telegram/
 agents/*/sessions/
+workspace/.clawhub/
+workspace/memory/
+workspace/tmp/
+workspace/canvas/
+workspace/output/
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/node_modules/
+**/.git/
 *.bak*
 *.tmp
 *.lock

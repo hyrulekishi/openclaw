@@ -22,6 +22,7 @@ def main():
     p.add_argument('--input', required=True, help='Translated JSON path')
     p.add_argument('--out-dir', required=True, help='Output directory')
     p.add_argument('--srt-mode', choices=['translated', 'bilingual'], default='translated')
+    p.add_argument('--debug', action='store_true', help='Keep extra debug artifacts like bilingual.txt')
     args = p.parse_args()
 
     inp = Path(args.input).expanduser().resolve()
@@ -65,17 +66,27 @@ def main():
                 ])
                 srt_index += 1
 
-    (out_dir / 'translated.txt').write_text('\n'.join(translated_txt).strip() + ('\n' if translated_txt else ''), encoding='utf-8')
-    (out_dir / 'bilingual.txt').write_text('\n'.join(bilingual_txt).rstrip() + ('\n' if bilingual_txt else ''), encoding='utf-8')
+    translated_txt_path = out_dir / 'translated.txt'
+    bilingual_txt_path = out_dir / 'bilingual.txt'
+    srt_path = out_dir / 'subtitles.zh.srt'
+
+    translated_txt_path.write_text('\n'.join(translated_txt).strip() + ('\n' if translated_txt else ''), encoding='utf-8')
+    if args.debug:
+        bilingual_txt_path.write_text('\n'.join(bilingual_txt).rstrip() + ('\n' if bilingual_txt else ''), encoding='utf-8')
+    elif bilingual_txt_path.exists():
+        bilingual_txt_path.unlink()
     if srt_lines:
-        (out_dir / 'subtitles.zh.srt').write_text('\n'.join(srt_lines), encoding='utf-8')
+        srt_path.write_text('\n'.join(srt_lines), encoding='utf-8')
+    elif srt_path.exists():
+        srt_path.unlink()
 
     summary = {
-        'translated_txt': str(out_dir / 'translated.txt'),
-        'bilingual_txt': str(out_dir / 'bilingual.txt'),
-        'srt': str(out_dir / 'subtitles.zh.srt') if srt_lines else None,
+        'translated_txt': str(translated_txt_path),
+        'bilingual_txt': str(bilingual_txt_path) if args.debug else None,
+        'srt': str(srt_path) if srt_lines else None,
         'segments': len(segs),
         'srt_mode': args.srt_mode,
+        'debug': args.debug,
     }
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 

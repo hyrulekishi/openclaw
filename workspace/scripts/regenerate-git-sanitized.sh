@@ -3,7 +3,6 @@ set -euo pipefail
 OC="${OPENCLAW_STATE_DIR:-$HOME/.openclaw}"
 GIT_DST="$OC/backup/git-sanitized"
 mkdir -p "$GIT_DST"
-rm -rf "$GIT_DST"/*
 TMP_FULL="${OC}/backup/full-encrypted"
 # Run main script but avoid interactive gpg by shadowing it if present.
 FAKEBIN="$(mktemp -d)"

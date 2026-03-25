@@ -1,12 +1,12 @@
 {
   "meta": {
-    "lastTouchedVersion": "2026.3.12",
-    "lastTouchedAt": "2026-03-14T02:49:26.733Z"
+    "lastTouchedVersion": "2026.3.13",
+    "lastTouchedAt": "2026-03-18T02:35:52.505Z"
   },
   "wizard": {
-    "lastRunAt": "2026-03-13T05:57:03.439Z",
-    "lastRunVersion": "2026.3.12",
-    "lastRunCommand": "onboard",
+    "lastRunAt": "2026-03-18T02:35:52.495Z",
+    "lastRunVersion": "2026.3.13",
+    "lastRunCommand": "doctor",
     "lastRunMode": "local"
   },
   "update": {
@@ -67,12 +67,12 @@
       "workspace": "/home/user/.openclaw/workspace",
       "memorySearch": {
         "provider": "openai",
-        "model": "text-embedding-qwen",
         "remote": {
           "baseUrl": "http://127.0.0.1:1235/v1/",
           "apiKey": "REDACTED"
         },
-        "fallback": "none"
+        "fallback": "none",
+        "model": "text-embedding-qwen"
       },
       "compaction": {
         "mode": "safeguard"
@@ -126,8 +126,7 @@
             }
           },
           "browser": {
-            "enabled": false,
-            "allowHostControl": false
+            "enabled": true
           },
           "prune": {
             "idleHours": 24,
@@ -187,15 +186,15 @@
   "channels": {
     "telegram": {
       "enabled": true,
-      "network": {
-        "autoSelectFamily": false
-      },
       "dmPolicy": "pairing",
       "allowFrom": [
         "2018861446"
       ],
       "groupPolicy": "allowlist",
-      "streaming": "partial"
+      "streaming": "partial",
+      "network": {
+        "autoSelectFamily": false
+      }
     }
   },
   "gateway": {
@@ -211,9 +210,71 @@
       "resetOnExit": false
     }
   },
+  "browser": {
+    "enabled": true,
+    "relayBindHost": "0.0.0.0",
+    "defaultProfile": "user",
+    "profiles": {
+      "openclaw": {
+        "cdpPort": 18800,
+        "color": "#FF4500"
+      },
+      "user": {
+        "driver": "existing-session",
+        "attachOnly": true,
+        "color": "#00AA00"
+      }
+    }
+  },
   "skills": {
     "install": {
       "nodeManager": "npm"
+    }
+  },
+  "plugins": {
+    "slots": {
+      "memory": "memory-lancedb-pro"
+    },
+    "entries": {
+      "memory-lancedb-pro": {
+        "enabled": true,
+        "config": {
+          "embedding": {
+            "provider": "openai-compatible",
+            "apiKey": "REDACTED",
+            "baseURL": "http://127.0.0.1:1235/v1",
+            "model": "text-embedding-qwen",
+            "dimensions": 1024
+          },
+          "autoCapture": true,
+          "autoRecall": true,
+          "smartExtraction": false,
+          "captureAssistant": false,
+          "extractMinMessages": 2,
+          "extractMaxChars": 8000,
+          "retrieval": {
+            "mode": "hybrid",
+            "vectorWeight": 0.7,
+            "bm25Weight": 0.3,
+            "minScore": 0.25,
+            "rerank": "none",
+            "candidatePoolSize": 12,
+            "filterNoise": true,
+            "hardMinScore": 0.28,
+            "lengthNormAnchor": 500
+          },
+          "sessionStrategy": "none",
+          "enableManagementTools": false,
+          "scopes": {
+            "default": "global"
+          }
+        }
+      }
+    },
+    "load": {
+      "paths": [
+        "/home/user/.nvm/versions/node/v22.22.1/lib/node_modules/memory-lancedb-pro"
+      ]
     }
   }
 }
